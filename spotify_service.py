@@ -30,13 +30,44 @@ class SpotifyService:
         """Returneaza starea curenta a redarii (sau None daca nimic nu ruleaza)."""
         return self.sp.current_playback()
 
-    def play(self, context_uri: str = None, uris: list = None) -> None:
-        """Porneste redarea. Optional: context_uri (playlist/album) sau lista de uris."""
-        self.sp.start_playback(context_uri=context_uri, uris=uris)
+    def play(self, context_uri=None, uris=None, offset_uri=None, device_id=None):
+        if device_id is None:
+            device_id = self.ensure_device()
+        if device_id is None:
+            raise Exception("No active Spotify device found")
 
-    def pause(self) -> None:
-        """Pune redarea pe pauza."""
-        self.sp.pause_playback()
+        # NU mai face transfer_playback — cauzeaza probleme
+        kwargs = {"device_id": device_id}
+
+        if context_uri:
+            kwargs["context_uri"] = context_uri
+        if uris:
+            kwargs["uris"] = uris
+        if offset_uri:
+            kwargs["offset"] = {"uri": offset_uri}
+
+        try:
+            self.sp.start_playback(**kwargs)
+        except spotipy.exceptions.SpotifyException as e:
+            if e.http_status == 403:
+                raise Exception(
+                    "Spotify a returnat 403. Verifica:\n"
+                    "1. Ai cont Spotify Premium?\n"
+                    "2. E Spotify deschis si activ pe device?\n"
+                    "3. Incearca sa dai Play manual o data in Spotify, apoi foloseste app-ul."
+                )
+            raise
+
+    def pause(self, device_id: str | None = None) -> None:
+        if device_id is None:
+            device_id = self.ensure_device()
+        try:
+            self.sp.pause_playback(device_id=device_id)
+        except spotipy.exceptions.SpotifyException as e:
+            if e.http_status == 403:
+                pass
+            else:
+                raise
 
     def next_track(self) -> None:
         """Sare la melodia urmatoare."""
@@ -137,3 +168,57 @@ class SpotifyService:
             "track_id":   track_id,
             "liked":      self.is_track_saved(track_id),
         }
+
+    def get_user_playlists(self, limit: int = 50) -> list[dict]:
+        results = self.sp.current_user_playlists(limit=limit)
+        playlists = []
+        for item in results["items"]:
+            if not item:
+                continue
+            cover_url = None
+            if item.get("images"):
+                cover_url = item["images"][0]["url"]
+            playlists.append({
+                "name": item["name"],
+                "uri": item["uri"],
+                "cover_url": cover_url,
+                "owner": item.get("owner", {}).get("display_name", ""),
+            })
+        return playlists
+
+    def get_playlist_tracks(self, playlist_uri: str) -> list[dict]:
+        playlist_id = playlist_uri.split(":")[-1]
+        tracks = []
+        results = self.sp.playlist_tracks(playlist_id, limit=100)
+
+        while results:
+            for item in results["items"]:
+                # Spotify returneaza fie "track" fie "item" depending on API version
+                track = item.get("track") or item.get("item")
+                if not track or track.get("is_local"):
+                    continue
+                artists = ", ".join(a["name"] for a in track.get("artists", []))
+                tracks.append({
+                    "name": track["name"],
+                    "artist": artists,
+                    "uri": track.get("uri", ""),
+                    "duration_ms": track.get("duration_ms", 0),
+                })
+            if results.get("next"):
+                results = self.sp.next(results)
+            else:
+                break
+
+        return tracks
+    def ensure_device(self):
+        devices = self.sp.devices().get("devices", [])
+        print(devices)
+        if not devices:
+            return None
+
+        # caută device activ
+        for d in devices:
+            if d.get("is_active"):
+                return d["id"]
+
+        return devices[0]["id"]
