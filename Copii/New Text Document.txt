@@ -1,0 +1,2 @@
+Adaugare credentiale spotify + mici functii pe spotify
+schimbare melodie, like,nex,previous
