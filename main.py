@@ -1,16 +1,12 @@
 import threading
+import cv2
 from spotify_service import SpotifyService
 from ui.app import SpotifyApp
 from gesture.detector import HandDetector
 from gesture.recognizer import GestureRecognizer
-import cv2
 
 
 def start_gesture_loop(service: SpotifyService, use_laptop_cam=False):
-    """
-    Ruleaza camera + MediaPipe intr-un thread separat.
-    Nu atinge UI-ul — apeleaza direct service-ul Spotify.
-    """
     detector   = HandDetector(use_laptop_cam=use_laptop_cam)
     recognizer = GestureRecognizer()
 
@@ -20,86 +16,64 @@ def start_gesture_loop(service: SpotifyService, use_laptop_cam=False):
         print(e)
         return
 
-    print("[Gesture] Loop pornit! Apasa Q in fereastra camerei pentru stop.")
+    print("[Gesture] Pornit! Gesturi active: ✌ Play/Pause | 🖐 Sus=Volum+ | 🖐 Jos=Volum-")
 
     while detector.running:
         frame, result = detector.read_frame()
         if frame is None:
             continue
 
-        # Deseneaza scheletul mainii
         frame = detector.draw_landmarks(frame, result)
+        data  = recognizer.process(result)
 
-        # Recunoaste gestul
-        data = recognizer.process(result)
         gesture = data['gesture']
-        if data['raw_label']:
-            print(f"Raw: {data['raw_label']} | Confirmed: {gesture}")
 
-        # Afiseaza label pe ecran
+        # Debug — vezi ce detecteaza in terminal
+        if data['raw_label']:
+            print(f"  {data['raw_label']}  | fingers: {data['fingers']}")
+
+        # ── Play / Pause ──────────────────────────────
+        if gesture == "PLAY_PAUSE" and recognizer.can_trigger("PLAY_PAUSE"):
+            recognizer.mark_triggered("PLAY_PAUSE")
+            print("[Gesture] → PLAY/PAUSE")
+            try:
+                state = service.get_current_playback()
+                if state and state.get("is_playing"):
+                    service.pause()
+                else:
+                    service.play()
+            except Exception as e:
+                print(f"[Gesture] Eroare: {e}")
+
+        # ── Volum + ───────────────────────────────────
+        elif gesture == "VOLUME_UP" and recognizer.can_trigger("VOLUME_UP"):
+            recognizer.mark_triggered("VOLUME_UP")
+            try:
+                state = service.get_current_playback()
+                if state and state.get("device"):
+                    vol = min(100, state["device"]["volume_percent"] + 10)
+                    service.set_volume(vol)
+                    print(f"[Gesture] → VOLUM: {vol}%")
+            except Exception as e:
+                print(f"[Gesture] Eroare volum: {e}")
+
+        # ── Volum - ───────────────────────────────────
+        elif gesture == "VOLUME_DOWN" and recognizer.can_trigger("VOLUME_DOWN"):
+            recognizer.mark_triggered("VOLUME_DOWN")
+            try:
+                state = service.get_current_playback()
+                if state and state.get("device"):
+                    vol = max(0, state["device"]["volume_percent"] - 10)
+                    service.set_volume(vol)
+                    print(f"[Gesture] → VOLUM: {vol}%")
+            except Exception as e:
+                print(f"[Gesture] Eroare volum: {e}")
+
+        # Afiseaza fereastra camerei
         if data['raw_label']:
             cv2.putText(frame, data['raw_label'], (10, 40),
                         cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 100), 2, cv2.LINE_AA)
 
-        # ── Actioneaza pe baza gestului ──────────────
-        if gesture and recognizer.can_trigger(gesture):
-            recognizer.mark_triggered(gesture)
-
-            if gesture == "PLAY_PAUSE":
-                print("[Gesture] → Play/Pause")
-                try:
-                    state = service.get_current_playback()
-                    if state and state.get("is_playing"):
-                        service.pause()
-                    else:
-                        service.play()
-                except Exception as e:
-                    print(f"[Gesture] Eroare play/pause: {e}")
-
-            elif gesture == "NEXT" or gesture == "SWIPE_LEFT":
-                print("[Gesture] → Next track")
-                try:
-                    service.next_track()
-                except Exception as e:
-                    print(f"[Gesture] Eroare next: {e}")
-
-            elif gesture == "PREV" or gesture == "SWIPE_RIGHT":
-                print("[Gesture] → Prev track")
-                try:
-                    service.previous_track()
-                except Exception as e:
-                    print(f"[Gesture] Eroare prev: {e}")
-
-            elif gesture == "LIKE":
-                print("[Gesture] → Like")
-                try:
-                    state = service.get_current_playback()
-                    if state and state.get("item"):
-                        service.toggle_like(state["item"]["id"])
-                except Exception as e:
-                    print(f"[Gesture] Eroare like: {e}")
-
-            elif gesture == "VOLUME_UP":
-                try:
-                    state = service.get_current_playback()
-                    if state and state.get("device"):
-                        vol = min(100, state["device"]["volume_percent"] + 8)
-                        service.set_volume(vol)
-                        print(f"[Gesture] → Volum: {vol}%")
-                except Exception as e:
-                    print(f"[Gesture] Eroare volum: {e}")
-
-            elif gesture == "VOLUME_DOWN":
-                try:
-                    state = service.get_current_playback()
-                    if state and state.get("device"):
-                        vol = max(0, state["device"]["volume_percent"] - 8)
-                        service.set_volume(vol)
-                        print(f"[Gesture] → Volum: {vol}%")
-                except Exception as e:
-                    print(f"[Gesture] Eroare volum: {e}")
-
-        # Afiseaza fereastra camerei
         cv2.imshow("Camera Gesturi", frame)
         if cv2.waitKey(1) & 0xFF in (ord('q'), 27):
             break
@@ -113,18 +87,14 @@ def main():
     service = SpotifyService()
     print("[OK]   Conectat!")
 
-    # ── Porneste camera intr-un thread separat ────────────────────────────────
-    # use_laptop_cam=False → IP Webcam telefon
-    # use_laptop_cam=True  → webcam laptop (backdoor)
     gesture_thread = threading.Thread(
         target=start_gesture_loop,
         args=(service,),
-        kwargs={"use_laptop_cam": True},
+        kwargs={"use_laptop_cam": True},  # False = telefon
         daemon=True,
     )
     gesture_thread.start()
 
-    # ── Deschide UI ───────────────────────────────────────────────────────────
     print("[OK]   Deschid interfata...")
     app = SpotifyApp(service)
     app.mainloop()
