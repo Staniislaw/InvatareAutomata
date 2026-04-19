@@ -51,7 +51,7 @@ class GestureRecognizer:
         velocity = dx / dt
         dist     = abs(dx)
 
-        if dist > 0.15 and velocity > 1.5:
+        if dist > 0.3 and dt < 2.0 and dx > 0:
             self._position_history.clear()
             return True
         return False
@@ -66,17 +66,16 @@ class GestureRecognizer:
         if len(self._position_history) < 6:
             return False
 
-        oldest   = self._position_history[0]
-        newest   = self._position_history[-1]
-        dt       = newest[2] - oldest[2]
+        oldest = self._position_history[0]
+        newest = self._position_history[-1]
+        dt     = newest[2] - oldest[2]
         if dt < 0.001:
             return False
 
-        dx       = newest[0] - oldest[0]
-        velocity = dx / dt
-        dist     = abs(dx)
+        dx   = newest[0] - oldest[0]
+        dist = abs(dx)
 
-        if dist > 0.15 and velocity < -1.5:
+        if dist > 0.3 and dt < 2.0 and dx < 0:
             self._position_history.clear()
             return True
         return False
