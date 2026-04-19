@@ -18,48 +18,35 @@ def start_gesture_loop(service: SpotifyService, app: SpotifyApp, use_laptop_cam=
         return
 
     print("[Gesture] Pornit!")
-    print("  ✌  Peace        → Play/Pause")
-    print("  🖐  Palma sus    → Volum +")
-    print("  🖐  Palma jos    → Volum -")
-    print("  ✊→  Pumn dreapta → Next")
-    print("  ←✊  Pumn stanga  → Prev")
-    print("  🫰  Inima        → Like")
-    print("  ☝   Aratator     → Cursor virtual")
-    print("  🤌  Aratator+mare → Click")
 
     while detector.running:
         frame, result = detector.read_frame()
         if frame is None:
             continue
 
-        frame = detector.draw_landmarks(frame, result)
-        data  = recognizer.process(result)
+        frame   = detector.draw_landmarks(frame, result)
+        data    = recognizer.process(result)
         gesture = data['gesture']
 
         # ── Cursor virtual ────────────────────────────
         if result and result.hand_landmarks:
             hand_lm = result.hand_landmarks[0]
             fingers = data['fingers']
-            thumb, index, middle, ring, pinky = fingers if len(fingers) == 5 else [False]*5
+            if len(fingers) == 5:
+                thumb, index, middle, ring, pinky = fingers
 
-            # Cursor activ cand DOAR degetul aratator e ridicat
-            # sau cand aratator + mare sunt apropiati (click)
-            only_index = not thumb and index and not middle and not ring and not pinky
-            pinch      = thumb and index and not middle and not ring and not pinky
+                # Cursor: doar index ridicat SAU pinch (index+mare)
+                only_index = not thumb and index and not middle and not ring and not pinky
+                pinch      = thumb and index and not middle and not ring and not pinky
 
-            if only_index or pinch:
-                fx = hand_lm[8].x   # varf index
-                fy = hand_lm[8].y
-                tx = hand_lm[4].x   # varf thumb
-                ty = hand_lm[4].y
-                app.after(0, lambda fx=fx, fy=fy, tx=tx, ty=ty:
-                          app.cursor.update(fx, fy, tx, ty))
-            else:
-                app.after(0, app.cursor.hide)
-        else:
-            app.after(0, app.cursor.hide)
+                if only_index or pinch:
+                    fx = hand_lm[8].x
+                    fy = hand_lm[8].y
+                    tx = hand_lm[4].x
+                    ty = hand_lm[4].y
+                    frame = app.cursor.update(fx, fy, tx, ty, frame=frame)
 
-        # ── Label pe camera ───────────────────────────
+        # ── Label gest pe camera ──────────────────────
         if data['raw_label']:
             cv2.putText(frame, data['raw_label'], (10, 40),
                         cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 100), 2, cv2.LINE_AA)
@@ -138,14 +125,13 @@ def main():
     print("[OK]   Deschid interfata...")
     app = SpotifyApp(service)
 
-    # Ataseaza cursorul virtual la fereastra
+    # Cursor virtual — deseneaza pe camera, click pe UI
     app.cursor = VirtualCursor(app)
 
-    # Porneste camera intr-un thread separat
     gesture_thread = threading.Thread(
         target=start_gesture_loop,
         args=(service, app),
-        kwargs={"use_laptop_cam": True},  # False = telefon
+        kwargs={"use_laptop_cam": True},
         daemon=True,
     )
     gesture_thread.start()
