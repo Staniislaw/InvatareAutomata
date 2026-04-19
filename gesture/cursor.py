@@ -67,7 +67,7 @@ class VirtualCursor:
             outline="#ffffff", width=2, fill=""
         )
 
-        self._canvas.lift()
+        self.app.lift(self._canvas)
 
     def update(self, finger_x: float, finger_y: float,
                thumb_x: float, thumb_y: float):
@@ -119,7 +119,7 @@ class VirtualCursor:
             self._canvas.itemconfig(self._label, text="")
             self._click_pending = False
 
-        self._canvas.lift()
+        self.app.lift(self._canvas)
 
     def hide(self):
         """Ascunde cursorul cand nu se vede mana."""
