@@ -4,9 +4,10 @@ from spotify_service import SpotifyService
 from ui.app import SpotifyApp
 from gesture.detector import HandDetector
 from gesture.recognizer import GestureRecognizer
+from gesture.cursor import VirtualCursor
 
 
-def start_gesture_loop(service: SpotifyService, use_laptop_cam=False):
+def start_gesture_loop(service: SpotifyService, app: SpotifyApp, use_laptop_cam=False):
     detector   = HandDetector(use_laptop_cam=use_laptop_cam)
     recognizer = GestureRecognizer()
 
@@ -16,7 +17,15 @@ def start_gesture_loop(service: SpotifyService, use_laptop_cam=False):
         print(e)
         return
 
-    print("[Gesture] Pornit! Gesturi active: ✌ Play/Pause | 🖐 Sus=Volum+ | 🖐 Jos=Volum-")
+    print("[Gesture] Pornit!")
+    print("  ✌  Peace        → Play/Pause")
+    print("  🖐  Palma sus    → Volum +")
+    print("  🖐  Palma jos    → Volum -")
+    print("  ✊→  Pumn dreapta → Next")
+    print("  ←✊  Pumn stanga  → Prev")
+    print("  🫰  Inima        → Like")
+    print("  ☝   Aratator     → Cursor virtual")
+    print("  🤌  Aratator+mare → Click")
 
     while detector.running:
         frame, result = detector.read_frame()
@@ -25,83 +34,93 @@ def start_gesture_loop(service: SpotifyService, use_laptop_cam=False):
 
         frame = detector.draw_landmarks(frame, result)
         data  = recognizer.process(result)
-
         gesture = data['gesture']
 
-        # Debug — vezi ce detecteaza in terminal
-        if data['raw_label']:
-            print(f"  {data['raw_label']}  | fingers: {data['fingers']}")
+        # ── Cursor virtual ────────────────────────────
+        if result and result.hand_landmarks:
+            hand_lm = result.hand_landmarks[0]
+            fingers = data['fingers']
+            thumb, index, middle, ring, pinky = fingers if len(fingers) == 5 else [False]*5
 
-        # ── Swipe Dreapta → Next ─────────────────────────
-        if gesture == "SWIPE_RIGHT" and recognizer.can_trigger("SWIPE_RIGHT"):
-            recognizer.mark_triggered("SWIPE_RIGHT")
-            print("[Gesture] → NEXT SONG")
-            try:
-                service.next_track()
-            except Exception as e:
-                print(f"[Gesture] Eroare: {e}")
+            # Cursor activ cand DOAR degetul aratator e ridicat
+            # sau cand aratator + mare sunt apropiati (click)
+            only_index = not thumb and index and not middle and not ring and not pinky
+            pinch      = thumb and index and not middle and not ring and not pinky
 
-        # ── Swipe Stanga → Prev ──────────────────────────
-        elif gesture == "SWIPE_LEFT" and recognizer.can_trigger("SWIPE_LEFT"):
-            recognizer.mark_triggered("SWIPE_LEFT")
-            print("[Gesture] → PREV SONG")
-            try:
-                service.previous_track()
-            except Exception as e:
-                print(f"[Gesture] Eroare: {e}")
+            if only_index or pinch:
+                fx = hand_lm[8].x   # varf index
+                fy = hand_lm[8].y
+                tx = hand_lm[4].x   # varf thumb
+                ty = hand_lm[4].y
+                app.after(0, lambda fx=fx, fy=fy, tx=tx, ty=ty:
+                          app.cursor.update(fx, fy, tx, ty))
+            else:
+                app.after(0, app.cursor.hide)
+        else:
+            app.after(0, app.cursor.hide)
 
-        # ── Like 🫰 ───────────────────────────────────────
-        if gesture == "LIKE" and recognizer.can_trigger("LIKE"):
-            recognizer.mark_triggered("LIKE")
-            print("[Gesture] → LIKE ❤")
-            try:
-                state = service.get_current_playback()
-                if state and state.get("item"):
-                    service.toggle_like(state["item"]["id"])
-            except Exception as e:
-                print(f"[Gesture] Eroare like: {e}")
-
-        # ── Play / Pause ──────────────────────────────
-        if gesture == "PLAY_PAUSE" and recognizer.can_trigger("PLAY_PAUSE"):
-            recognizer.mark_triggered("PLAY_PAUSE")
-            print("[Gesture] → PLAY/PAUSE")
-            try:
-                state = service.get_current_playback()
-                if state and state.get("is_playing"):
-                    service.pause()
-                else:
-                    service.play()
-            except Exception as e:
-                print(f"[Gesture] Eroare: {e}")
-
-        # ── Volum + ───────────────────────────────────
-        elif gesture == "VOLUME_UP" and recognizer.can_trigger("VOLUME_UP"):
-            recognizer.mark_triggered("VOLUME_UP")
-            try:
-                state = service.get_current_playback()
-                if state and state.get("device"):
-                    vol = min(100, state["device"]["volume_percent"] + 10)
-                    service.set_volume(vol)
-                    print(f"[Gesture] → VOLUM: {vol}%")
-            except Exception as e:
-                print(f"[Gesture] Eroare volum: {e}")
-
-        # ── Volum - ───────────────────────────────────
-        elif gesture == "VOLUME_DOWN" and recognizer.can_trigger("VOLUME_DOWN"):
-            recognizer.mark_triggered("VOLUME_DOWN")
-            try:
-                state = service.get_current_playback()
-                if state and state.get("device"):
-                    vol = max(0, state["device"]["volume_percent"] - 10)
-                    service.set_volume(vol)
-                    print(f"[Gesture] → VOLUM: {vol}%")
-            except Exception as e:
-                print(f"[Gesture] Eroare volum: {e}")
-
-        # Afiseaza fereastra camerei
+        # ── Label pe camera ───────────────────────────
         if data['raw_label']:
             cv2.putText(frame, data['raw_label'], (10, 40),
                         cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 100), 2, cv2.LINE_AA)
+
+        # ── Actiuni Spotify ───────────────────────────
+        if gesture and recognizer.can_trigger(gesture):
+            recognizer.mark_triggered(gesture)
+
+            if gesture == "LIKE":
+                print("[Gesture] → LIKE ❤")
+                try:
+                    state = service.get_current_playback()
+                    if state and state.get("item"):
+                        service.toggle_like(state["item"]["id"])
+                except Exception as e:
+                    print(f"[Gesture] Eroare: {e}")
+
+            elif gesture == "PLAY_PAUSE":
+                print("[Gesture] → PLAY/PAUSE")
+                try:
+                    state = service.get_current_playback()
+                    if state and state.get("is_playing"):
+                        service.pause()
+                    else:
+                        service.play()
+                except Exception as e:
+                    print(f"[Gesture] Eroare: {e}")
+
+            elif gesture == "SWIPE_RIGHT":
+                print("[Gesture] → NEXT SONG")
+                try:
+                    service.next_track()
+                except Exception as e:
+                    print(f"[Gesture] Eroare: {e}")
+
+            elif gesture == "SWIPE_LEFT":
+                print("[Gesture] → PREV SONG")
+                try:
+                    service.previous_track()
+                except Exception as e:
+                    print(f"[Gesture] Eroare: {e}")
+
+            elif gesture == "VOLUME_UP":
+                try:
+                    state = service.get_current_playback()
+                    if state and state.get("device"):
+                        vol = min(100, state["device"]["volume_percent"] + 10)
+                        service.set_volume(vol)
+                        print(f"[Gesture] → VOLUM: {vol}%")
+                except Exception as e:
+                    print(f"[Gesture] Eroare: {e}")
+
+            elif gesture == "VOLUME_DOWN":
+                try:
+                    state = service.get_current_playback()
+                    if state and state.get("device"):
+                        vol = max(0, state["device"]["volume_percent"] - 10)
+                        service.set_volume(vol)
+                        print(f"[Gesture] → VOLUM: {vol}%")
+                except Exception as e:
+                    print(f"[Gesture] Eroare: {e}")
 
         cv2.imshow("Camera Gesturi", frame)
         if cv2.waitKey(1) & 0xFF in (ord('q'), 27):
@@ -116,16 +135,21 @@ def main():
     service = SpotifyService()
     print("[OK]   Conectat!")
 
+    print("[OK]   Deschid interfata...")
+    app = SpotifyApp(service)
+
+    # Ataseaza cursorul virtual la fereastra
+    app.cursor = VirtualCursor(app)
+
+    # Porneste camera intr-un thread separat
     gesture_thread = threading.Thread(
         target=start_gesture_loop,
-        args=(service,),
+        args=(service, app),
         kwargs={"use_laptop_cam": True},  # False = telefon
         daemon=True,
     )
     gesture_thread.start()
 
-    print("[OK]   Deschid interfata...")
-    app = SpotifyApp(service)
     app.mainloop()
 
 
