@@ -137,11 +137,11 @@ def gesture_loop(app: TestApp):
                 pinky  = lm[20].y < lm[18].y
 
                 only_index = not thumb and index and not middle and not ring and not pinky
-                pinch      = thumb and index and not middle and not ring and not pinky
+                pinch_mid = thumb and not index and middle and not ring and not pinky
 
-                if only_index or pinch:
-                    fx = lm[8].x
-                    fy = lm[8].y
+                if only_index or pinch_mid:
+                    fx = lm[8].x if only_index else lm[12].x
+                    fy = lm[8].y if only_index else lm[12].y
                     tx = lm[4].x
                     ty = lm[4].y
                     frame = app.cursor.update(fx, fy, tx, ty, frame=frame)
