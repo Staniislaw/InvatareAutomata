@@ -33,6 +33,8 @@ def start_gesture_loop(service: SpotifyService, use_laptop_cam=False):
         # Recunoaste gestul
         data = recognizer.process(result)
         gesture = data['gesture']
+        if data['raw_label']:
+            print(f"Raw: {data['raw_label']} | Confirmed: {gesture}")
 
         # Afiseaza label pe ecran
         if data['raw_label']:
