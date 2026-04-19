@@ -162,7 +162,7 @@ def gesture_loop(app: TestApp):
                                (0,0,255) if i in (4,8,12,16,20) else (255,255,255), -1)
 
                 # Label
-                status = "CLICK (pinch)" if pinch else "cursor (index)" if only_index else ""
+                status = "CLICK (middle+thumb)" if pinch_mid else "cursor (middle)" if only_middle else ""
                 if status:
                     cv2.putText(frame, status, (10, 35),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,100), 2)
