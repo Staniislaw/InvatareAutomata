@@ -40,11 +40,11 @@ def start_gesture_loop(service: SpotifyService, app: SpotifyApp, use_laptop_cam=
 
                 # Cursor: doar index ridicat SAU pinch (index+mare)
                 only_index = not thumb and index and not middle and not ring and not pinky
-                pinch      = thumb and index and not middle and not ring and not pinky
+                pinch_mid = thumb and not index and middle and not ring and not pinky
 
-                if only_index or pinch:
-                    fx = hand_lm[8].x
-                    fy = hand_lm[8].y
+                if only_index or pinch_mid:
+                    fx = hand_lm[8].x if only_index else hand_lm[12].x
+                    fy = hand_lm[8].y if only_index else hand_lm[12].y
                     tx = hand_lm[4].x
                     ty = hand_lm[4].y
                     frame = app.cursor.update(fx, fy, tx, ty, frame=frame)
