@@ -50,6 +50,17 @@ def start_gesture_loop(service: SpotifyService, use_laptop_cam=False):
             except Exception as e:
                 print(f"[Gesture] Eroare: {e}")
 
+        # ── Like 🫰 ───────────────────────────────────────
+        if gesture == "LIKE" and recognizer.can_trigger("LIKE"):
+            recognizer.mark_triggered("LIKE")
+            print("[Gesture] → LIKE ❤")
+            try:
+                state = service.get_current_playback()
+                if state and state.get("item"):
+                    service.toggle_like(state["item"]["id"])
+            except Exception as e:
+                print(f"[Gesture] Eroare like: {e}")
+
         # ── Play / Pause ──────────────────────────────
         if gesture == "PLAY_PAUSE" and recognizer.can_trigger("PLAY_PAUSE"):
             recognizer.mark_triggered("PLAY_PAUSE")

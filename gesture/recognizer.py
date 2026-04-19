@@ -16,6 +16,7 @@ class GestureRecognizer:
         "VOLUME_DOWN":  0.5,
         "SWIPE_RIGHT":  1.5,
         "SWIPE_LEFT":   1.5,
+        "LIKE":         3.0,
     }
 
     def __init__(self):
@@ -39,6 +40,28 @@ class GestureRecognizer:
     def detect_volume_down(self, fingers, palm_y):
         """🖐 Palma deschisa in JUMATATEA DE JOS a ecranului."""
         return sum(fingers) >= 4 and palm_y > 0.6
+
+    def detect_like(self, fingers, hand_lm):
+        """
+        Gest: Inima coreana 🫰
+        Degetul mare + index ridicate si apropiate, restul inchise.
+        Backup: Thumbs up 👍 (doar degetul mare ridicat sus).
+        """
+        thumb, index, middle, ring, pinky = fingers
+
+        # ── Inima coreana: thumb + index ridicate, restul jos ────
+        if thumb and index and not middle and not ring and not pinky:
+            # Verifica ca thumb si index sunt apropiati (formeaza inima)
+            dist = abs(hand_lm[4].x - hand_lm[8].x) + abs(hand_lm[4].y - hand_lm[8].y)
+            if dist < 0.15:
+                return True
+
+        # ── Backup: Thumbs up 👍 ─────────────────────────────────
+        if thumb and not index and not middle and not ring and not pinky:
+            if hand_lm[4].y < hand_lm[9].y:  # degetul mare ridicat sus
+                return True
+
+        return False
 
     def detect_swipe_right(self, fingers, hand_lm):
         """
@@ -126,7 +149,11 @@ class GestureRecognizer:
         # ── Celelalte gesturi doar daca nu e bloc ────
         elif time.time() > self._swipe_blocked_until:
 
-            if self.detect_play_pause(fingers):
+            if self.detect_like(fingers, hand_lm):
+                gesture   = "LIKE"
+                raw_label = "🫰 Like!"
+
+            elif self.detect_play_pause(fingers):
                 gesture   = "PLAY_PAUSE"
                 raw_label = "✌ Play/Pause"
 
