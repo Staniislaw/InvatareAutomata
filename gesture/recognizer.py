@@ -43,19 +43,10 @@ class GestureRecognizer:
 
     def detect_like(self, fingers, hand_lm):
         """
-        Gest: Inima coreana 🫰
         Degetul mare + index ridicate si apropiate, restul inchise.
         Backup: Thumbs up 👍 (doar degetul mare ridicat sus).
         """
         thumb, index, middle, ring, pinky = fingers
-
-        # ── Inima coreana: thumb + index ridicate, restul jos ────
-        if thumb and index and not middle and not ring and not pinky:
-            # Verifica ca thumb si index sunt apropiati (formeaza inima)
-            dist = abs(hand_lm[4].x - hand_lm[8].x) + abs(hand_lm[4].y - hand_lm[8].y)
-            if dist < 0.15:
-                return True
-
         # ── Backup: Thumbs up 👍 ─────────────────────────────────
         if thumb and not index and not middle and not ring and not pinky:
             if hand_lm[4].y < hand_lm[9].y:  # degetul mare ridicat sus
