@@ -122,3 +122,5 @@ with HandLandmarker.create_from_options(options) as landmarker:
 
 cap.release()
 cv2.destroyAllWindows()
+
+
