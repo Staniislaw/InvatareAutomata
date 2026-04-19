@@ -5,6 +5,7 @@ Arata pe ecran exact ce detecteaza MediaPipe pentru fiecare deget.
 """
 
 import cv2
+import collections
 import mediapipe as mp
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python.vision import HandLandmarker, HandLandmarkerOptions, RunningMode
@@ -22,6 +23,7 @@ options = HandLandmarkerOptions(
 )
 
 cap = cv2.VideoCapture(0)  # 0 = webcam laptop
+position_history = collections.deque(maxlen=15)
 
 print("Pornit! Arata diferite gesturi in fata camerei.")
 print("Apasa Q pentru iesire.\n")
@@ -92,6 +94,32 @@ with HandLandmarker.create_from_options(options) as landmarker:
             txt(f"Ring:   {'UP' if ring   else 'down'}", 165, (0,255,100) if ring   else (100,100,100))
             txt(f"Pinky:  {'UP' if pinky  else 'down'}", 185, (0,255,100) if pinky  else (100,100,100))
 
+            # ── Swipe detection ──────────────────────
+            palm_x_norm = lm[9].x
+            position_history.append((palm_x_norm, palm_y, time.time()))
+
+            swipe = ""
+            if len(position_history) >= 6:
+                oldest  = position_history[0]
+                newest  = position_history[-1]
+                dt      = newest[2] - oldest[2]
+                dx      = newest[0] - oldest[0]
+                if dt > 0.001:
+                    velocity = dx / dt
+                    dist     = abs(dx)
+                    # Arata valorile in terminal
+                    print(f"dx={dx:.2f} velocity={velocity:.1f} dist={dist:.2f}")
+                    if dist > 0.15 and velocity > 1.5:
+                        swipe = "SWIPE DREAPTA → NEXT"
+                        position_history.clear()
+                    elif dist > 0.15 and velocity < -1.5:
+                        swipe = "SWIPE STANGA ← PREV"
+                        position_history.clear()
+
+            if swipe:
+                cv2.putText(frame, swipe, (w//2 - 150, h//2),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,255,255), 3, cv2.LINE_AA)
+
             # ── Gest detectat ─────────────────────────
             gest = ""
             color_gest = (0, 255, 100)
@@ -122,5 +150,3 @@ with HandLandmarker.create_from_options(options) as landmarker:
 
 cap.release()
 cv2.destroyAllWindows()
-
-
