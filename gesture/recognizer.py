@@ -21,9 +21,9 @@ class GestureRecognizer:
 
     def __init__(self):
         self._last_action_time = {}
-        self._position_history = collections.deque(maxlen=15)
-        self._swipe_blocked_until = 0  # bloc dupa swipe
-
+        self._position_history_r = collections.deque(maxlen=15)  # pentru right
+        self._position_history_l = collections.deque(maxlen=15)  # pentru left
+        self._swipe_blocked_until = 0
     # ─────────────────────────────────────────────────
     #  FUNCTII INDIVIDUALE
     # ─────────────────────────────────────────────────
@@ -59,47 +59,39 @@ class GestureRecognizer:
         PUMN inchis miscat de la stanga la dreapta = Next song.
         Pumnul evita conflictele cu Play/Pause si Volum.
         """
-        if sum(fingers) > 1:  # nu e pumn — ignora
-            self._position_history.clear()
+        if sum(fingers) > 1:
+            self._position_history_r.clear()
             return False
-
-        self._position_history.append((hand_lm[9].x, time.time()))
-
-        if len(self._position_history) < 6:
+        self._position_history_r.append((hand_lm[9].x, time.time()))
+        if len(self._position_history_r) < 6:
             return False
-
-        oldest = self._position_history[0]
-        newest = self._position_history[-1]
-        dt     = newest[1] - oldest[1]
-        dx     = newest[0] - oldest[0]
-        dist   = abs(dx)
-
-        if dist > 0.3 and dt < 2.0 and dx > 0:
-            self._position_history.clear()
+        oldest = self._position_history_r[0]
+        newest = self._position_history_r[-1]
+        dt = newest[1] - oldest[1]
+        dx = newest[0] - oldest[0]
+        if abs(dx) > 0.3 and dt < 2.0 and dx > 0:
+            self._position_history_r.clear()
+            self._position_history_l.clear()
             return True
         return False
 
-    def detect_swipe_left(self, fingers, hand_lm):
+def detect_swipe_left(self, fingers, hand_lm):
         """
         PUMN inchis miscat de la dreapta la stanga = Previous song.
         """
-        if sum(fingers) > 1:  # nu e pumn — ignora
-            self._position_history.clear()
+        if sum(fingers) > 1:
+            self._position_history_l.clear()
             return False
-
-        self._position_history.append((hand_lm[9].x, time.time()))
-
-        if len(self._position_history) < 6:
+        self._position_history_l.append((hand_lm[9].x, time.time()))
+        if len(self._position_history_l) < 6:
             return False
-
-        oldest = self._position_history[0]
-        newest = self._position_history[-1]
-        dt     = newest[1] - oldest[1]
-        dx     = newest[0] - oldest[0]
-        dist   = abs(dx)
-
-        if dist > 0.3 and dt < 2.0 and dx < 0:
-            self._position_history.clear()
+        oldest = self._position_history_l[0]
+        newest = self._position_history_l[-1]
+        dt = newest[1] - oldest[1]
+        dx = newest[0] - oldest[0]
+        if abs(dx) > 0.3 and dt < 2.0 and dx < 0:
+            self._position_history_l.clear()
+            self._position_history_r.clear()
             return True
         return False
 
@@ -111,7 +103,8 @@ class GestureRecognizer:
         empty = {'gesture': None, 'fingers': [], 'palm_y': None, 'raw_label': ''}
 
         if not result or not result.hand_landmarks:
-            self._position_history.clear()
+            self._position_history_r.clear()
+            self._position_history_l.clear()
             return empty
 
         hand_lm    = result.hand_landmarks[0]
