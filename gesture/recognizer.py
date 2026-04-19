@@ -75,7 +75,7 @@ class GestureRecognizer:
             return True
         return False
 
-def detect_swipe_left(self, fingers, hand_lm):
+    def detect_swipe_left(self, fingers, hand_lm):
         """
         PUMN inchis miscat de la dreapta la stanga = Previous song.
         """
@@ -98,7 +98,6 @@ def detect_swipe_left(self, fingers, hand_lm):
     # ─────────────────────────────────────────────────
     #  PROCESOR PRINCIPAL
     # ─────────────────────────────────────────────────
-
     def process(self, result):
         empty = {'gesture': None, 'fingers': [], 'palm_y': None, 'raw_label': ''}
 
