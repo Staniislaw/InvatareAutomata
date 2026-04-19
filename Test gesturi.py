@@ -109,12 +109,14 @@ with HandLandmarker.create_from_options(options) as landmarker:
                     dist     = abs(dx)
                     # Arata valorile in terminal
                     print(f"dx={dx:.2f} velocity={velocity:.1f} dist={dist:.2f}")
-                    if dist > 0.15 and velocity > 1.5:
-                        swipe = "SWIPE DREAPTA → NEXT"
-                        position_history.clear()
-                    elif dist > 0.15 and velocity < -1.5:
-                        swipe = "SWIPE STANGA ← PREV"
-                        position_history.clear()
+                    # Folosim distanta + directie, nu velocitate
+                    if dist > 0.3 and dt < 2.0:
+                        if dx > 0:
+                            swipe = "SWIPE DREAPTA → NEXT"
+                            position_history.clear()
+                        else:
+                            swipe = "SWIPE STANGA ← PREV"
+                            position_history.clear()
 
             if swipe:
                 cv2.putText(frame, swipe, (w//2 - 150, h//2),
