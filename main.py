@@ -19,6 +19,9 @@ def start_gesture_loop(service: SpotifyService, app: SpotifyApp, use_laptop_cam=
 
     print("[Gesture] Pornit!")
 
+    # Volum local — evita apeluri API la fiecare frame
+    local_volume = 50
+
     while detector.running:
         frame, result = detector.read_frame()
         if frame is None:
@@ -45,6 +48,8 @@ def start_gesture_loop(service: SpotifyService, app: SpotifyApp, use_laptop_cam=
                     tx = hand_lm[4].x
                     ty = hand_lm[4].y
                     frame = app.cursor.update(fx, fy, tx, ty, frame=frame)
+                else:
+                    app.after(0, app.cursor.hide)
 
         # ── Label gest pe camera ──────────────────────
         if data['raw_label']:
@@ -91,21 +96,17 @@ def start_gesture_loop(service: SpotifyService, app: SpotifyApp, use_laptop_cam=
 
             elif gesture == "VOLUME_UP":
                 try:
-                    state = service.get_current_playback()
-                    if state and state.get("device"):
-                        vol = min(100, state["device"]["volume_percent"] + 10)
-                        service.set_volume(vol)
-                        print(f"[Gesture] → VOLUM: {vol}%")
+                    local_volume = min(100, local_volume + 10)
+                    service.set_volume(local_volume)
+                    print(f"[Gesture] → VOLUM: {local_volume}%")
                 except Exception as e:
                     print(f"[Gesture] Eroare: {e}")
 
             elif gesture == "VOLUME_DOWN":
                 try:
-                    state = service.get_current_playback()
-                    if state and state.get("device"):
-                        vol = max(0, state["device"]["volume_percent"] - 10)
-                        service.set_volume(vol)
-                        print(f"[Gesture] → VOLUM: {vol}%")
+                    local_volume = max(0, local_volume - 10)
+                    service.set_volume(local_volume)
+                    print(f"[Gesture] → VOLUM: {local_volume}%")
                 except Exception as e:
                     print(f"[Gesture] Eroare: {e}")
 

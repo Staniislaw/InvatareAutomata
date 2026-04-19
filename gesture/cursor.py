@@ -1,7 +1,7 @@
 """
 gesture/cursor.py
-Cursor virtual — desenat in fereastra CAMEREI (nu peste UI).
-Coordonatele degetului sunt mapate pe fereastra tkinter pentru click.
+Cursor verde afisat in UI (peste interfata Spotify).
+Cursorul e doar vizual — click-urile trec prin el la widget-urile de dedesubt.
 """
 
 import tkinter as tk
@@ -9,84 +9,131 @@ import time
 
 
 class VirtualCursor:
-    """
-    Cursorul apare in fereastra camerei ca un cerc verde.
-    Cand se face pinch, se detecteaza widget-ul tkinter
-    de la coordonatele corespunzatoare si se simuleaza click.
-    """
 
-    CLICK_DIST     = 0.07   # distanta normalizata thumb+index pentru click
-    CLICK_COOLDOWN = 1.0    # secunde intre click-uri
+    CLICK_DIST     = 0.07
+    CLICK_COOLDOWN = 1.5
+    RADIUS         = 16
 
     def __init__(self, app):
-        self.app  = app
-        self._last_click_time = 0
-        self._click_pending   = False
+        self.app          = app
+        self._is_pinching = False
+        self._last_click  = 0
 
-    def update(self, finger_x: float, finger_y: float,
-               thumb_x: float, thumb_y: float, frame=None):
+        # Canvas transparent peste UI — doar pentru desen cursor
+        self._canvas = tk.Canvas(
+            app,
+            bg="",                  # transparent
+            highlightthickness=0,
+            bd=0,
+        )
+        self._canvas.place(x=0, y=0, relwidth=1, relheight=1)
+
+        # Dezactiveaza toate evenimentele pe canvas
+        # ca sa treaca click-urile la widget-urile de dedesubt
+        self._canvas.bind("<Button-1>", lambda e: self._pass_click(e))
+        self._canvas.configure(takefocus=False)
+
+        # Elementele cursor
+        r = self.RADIUS
+        self._ring  = self._canvas.create_oval(0,0,0,0, outline="#1DB954", width=2, fill="")
+        self._dot   = self._canvas.create_oval(0,0,0,0, fill="#1DB954", outline="")
+        self._text  = self._canvas.create_text(0,0, text="", fill="#1DB954",
+                                                font=("Helvetica", 9, "bold"))
+
+        # Ridica canvas-ul deasupra tuturor widget-urilor
+        self._canvas.place(x=0, y=0, relwidth=1, relheight=1)
+        self._canvas.after(100, self._raise_canvas)
+
+    def _raise_canvas(self):
+        self._canvas.place(x=0, y=0, relwidth=1, relheight=1)
+
+    def _pass_click(self, event):
+        """Transmite click-ul la widget-ul de dedesubt."""
+        self._canvas.lower()
+        widget = self.app.winfo_containing(event.x_root, event.y_root)
+        self._canvas.after(10, self._raise_canvas)
+        if widget and widget != self._canvas:
+            try:
+                widget.event_generate("<Button-1>", x=0, y=0)
+            except Exception:
+                pass
+
+    def update(self, finger_x, finger_y, thumb_x, thumb_y, frame=None):
         """
-        finger_x, finger_y = pozitia normalizata (0-1) a varfului degetului aratator
-        thumb_x, thumb_y   = pozitia normalizata a degetului mare
-        frame              = frame-ul OpenCV pe care desenam cursorul (optional)
-        Returneaza frame-ul modificat.
+        Actualizeaza pozitia cursorului in UI.
+        finger_x, finger_y = coordonate normalizate 0-1
         """
         import cv2
-        import numpy as np
 
-        # Coordonate in fereastra tkinter
-        w = self.app.winfo_width()
-        h = self.app.winfo_height()
+        w  = self.app.winfo_width()
+        h  = self.app.winfo_height()
         cx = int(finger_x * w)
         cy = int(finger_y * h)
+        r  = self.RADIUS
 
-        # Detecteaza pinch (click)
-        dist = ((finger_x - thumb_x)**2 + (finger_y - thumb_y)**2) ** 0.5
-        is_clicking = dist < self.CLICK_DIST
+        dist        = ((finger_x - thumb_x)**2 + (finger_y - thumb_y)**2) ** 0.5
+        is_pinching = dist < self.CLICK_DIST
 
-        # Deseneaza pe frame-ul camerei
+        # ── Deseneaza cursorul in UI ──────────────────
+        if is_pinching:
+            # Cerc alb = click
+            self._canvas.itemconfig(self._ring, outline="#ffffff", width=3)
+            self._canvas.itemconfig(self._dot,  fill="#ffffff")
+            self._canvas.itemconfig(self._text, text="●", fill="#ffffff")
+        else:
+            # Cerc verde = cursor normal
+            self._canvas.itemconfig(self._ring, outline="#1DB954", width=2)
+            self._canvas.itemconfig(self._dot,  fill="#1DB954")
+            self._canvas.itemconfig(self._text, text="", fill="#1DB954")
+
+        self._canvas.coords(self._ring, cx-r, cy-r, cx+r, cy+r)
+        self._canvas.coords(self._dot,  cx-3,  cy-3,  cx+3,  cy+3)
+        self._canvas.coords(self._text, cx, cy - r - 10)
+
+        # ── Click la leading edge ─────────────────────
+        if is_pinching and not self._is_pinching:
+            if time.time() - self._last_click > self.CLICK_COOLDOWN:
+                self._last_click = time.time()
+                self.app.after(0, lambda: self._do_click(cx, cy))
+
+        self._is_pinching = is_pinching
+
+        # ── Deseneaza indicator mic pe camera ─────────
         if frame is not None:
             fh, fw = frame.shape[:2]
             fx = int(finger_x * fw)
             fy = int(finger_y * fh)
-
-            if is_clicking:
-                cv2.circle(frame, (fx, fy), 22, (255, 255, 255), 3)
-                cv2.circle(frame, (fx, fy), 6,  (255, 255, 255), -1)
-                cv2.putText(frame, "CLICK", (fx - 25, fy - 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
-            else:
-                cv2.circle(frame, (fx, fy), 18, (0, 255, 100), 2)
-                cv2.circle(frame, (fx, fy), 4,  (0, 255, 100), -1)
-                cv2.putText(frame, "cursor", (fx - 20, fy - 25),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,100), 1)
-
-        # Declanseaza click
-        if is_clicking and not self._click_pending and self._can_click():
-            self._click_pending = True
-            self.app.after(0, lambda: self._do_click(cx, cy))
-        elif not is_clicking:
-            self._click_pending = False
+            color = (255,255,255) if is_pinching else (0,255,100)
+            cv2.circle(frame, (fx, fy), 8, color, -1)
 
         return frame
 
-    def _can_click(self):
-        return time.time() - self._last_click_time > self.CLICK_COOLDOWN
+    def hide(self):
+        """Ascunde cursorul cand nu e mana detectata."""
+        self._canvas.coords(self._ring, 0,0,0,0)
+        self._canvas.coords(self._dot,  0,0,0,0)
+        self._canvas.itemconfig(self._text, text="")
 
     def _do_click(self, x, y):
-        """Simuleaza click la coordonatele x, y in fereastra tkinter."""
-        self._last_click_time = time.time()
-
+        """Click pe widget-ul de la coordonatele x,y din UI."""
+        # Coboara canvas temporar ca sa gasim widget-ul corect
+        self._canvas.lower()
         widget = self.app.winfo_containing(
             self.app.winfo_rootx() + x,
             self.app.winfo_rooty() + y
         )
+        self._canvas.after(50, self._raise_canvas)
 
-        if widget and widget != self.app:
+        if widget and widget != self.app and widget != self._canvas:
             try:
                 widget.event_generate("<Button-1>", x=0, y=0)
-                print(f"[Cursor] Click pe: {widget.__class__.__name__} — {widget.cget('text') if hasattr(widget, 'cget') else ''}")
+                name = ""
+                try:
+                    name = widget.cget("text")[:20]
+                except Exception:
+                    pass
+                print(f"[Cursor] Click: {widget.__class__.__name__} '{name}'")
             except Exception as e:
-                print(f"[Cursor] Eroare click: {e}")
+                print(f"[Cursor] Eroare: {e}")
         else:
-            print(f"[Cursor] Niciun widget la ({x}, {y})")
+            print(f"[Cursor] Niciun widget la ({x},{y})")
