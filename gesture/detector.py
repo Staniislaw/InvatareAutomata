@@ -11,6 +11,13 @@ from mediapipe.tasks.python.vision import HandLandmarker, HandLandmarkerOptions,
 import time
 import os
 
+# ── Configurare sursa video ───────────────────────────────
+# Schimba PHONE_IP cu IP-ul tau din IP Webcam
+PHONE_IP   = "192.168.43.1"
+PHONE_PORT = 8080
+PHONE_URL  = f"http://{PHONE_IP}:{PHONE_PORT}/video"
+
+# Backdrop pentru webcam laptop
 LAPTOP_WEBCAM_INDEX = 0
 
 MODEL_PATH = "hand_landmarker.task"
@@ -63,8 +70,19 @@ class HandDetector:
 
     def connect(self):
         """Conecteaza la sursa video."""
-        print(f"[Gesture] Conectare webcam laptop (index {LAPTOP_WEBCAM_INDEX})...")
-        self.cap = cv2.VideoCapture(LAPTOP_WEBCAM_INDEX)
+        if self.use_laptop_cam:
+            print(f"[Gesture] Conectare webcam laptop (index {LAPTOP_WEBCAM_INDEX})...")
+            self.cap = cv2.VideoCapture(LAPTOP_WEBCAM_INDEX)
+        else:
+            print(f"[Gesture] Conectare IP Webcam: {PHONE_URL}")
+            self.cap = cv2.VideoCapture(PHONE_URL)
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        if not self.cap.isOpened():
+            raise ConnectionError(
+                f"[Gesture] Nu s-a putut conecta la "
+                f"{'webcam laptop' if self.use_laptop_cam else PHONE_URL}"
+            )
 
         self.running = True
         print("[Gesture] Conectat!")
@@ -76,6 +94,10 @@ class HandDetector:
         """
         if not self.cap or not self.running:
             return None, None
+
+        # Goleste buffer-ul — citeste ultimul frame disponibil (evita freeze)
+        for _ in range(2):
+            self.cap.grab()
 
         ret, frame = self.cap.read()
         if not ret:
