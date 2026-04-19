@@ -22,7 +22,7 @@ class VirtualCursor:
         # Canvas transparent peste UI — doar pentru desen cursor
         self._canvas = tk.Canvas(
             app,
-            bg="",                  # transparent
+            bg="#000001",
             highlightthickness=0,
             bd=0,
         )
@@ -32,6 +32,11 @@ class VirtualCursor:
         # ca sa treaca click-urile la widget-urile de dedesubt
         self._canvas.bind("<Button-1>", lambda e: self._pass_click(e))
         self._canvas.configure(takefocus=False)
+        # Seteaza culoarea transparenta pe Windows
+        try:
+            app.wm_attributes("-transparentcolor", "#000001")
+        except Exception:
+            pass
 
         # Elementele cursor
         r = self.RADIUS
