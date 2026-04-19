@@ -32,6 +32,24 @@ def start_gesture_loop(service: SpotifyService, use_laptop_cam=False):
         if data['raw_label']:
             print(f"  {data['raw_label']}  | fingers: {data['fingers']}")
 
+        # ── Swipe Dreapta → Next ─────────────────────────
+        if gesture == "SWIPE_RIGHT" and recognizer.can_trigger("SWIPE_RIGHT"):
+            recognizer.mark_triggered("SWIPE_RIGHT")
+            print("[Gesture] → NEXT SONG")
+            try:
+                service.next_track()
+            except Exception as e:
+                print(f"[Gesture] Eroare: {e}")
+
+        # ── Swipe Stanga → Prev ──────────────────────────
+        elif gesture == "SWIPE_LEFT" and recognizer.can_trigger("SWIPE_LEFT"):
+            recognizer.mark_triggered("SWIPE_LEFT")
+            print("[Gesture] → PREV SONG")
+            try:
+                service.previous_track()
+            except Exception as e:
+                print(f"[Gesture] Eroare: {e}")
+
         # ── Play / Pause ──────────────────────────────
         if gesture == "PLAY_PAUSE" and recognizer.can_trigger("PLAY_PAUSE"):
             recognizer.mark_triggered("PLAY_PAUSE")
