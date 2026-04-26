@@ -19,7 +19,6 @@ def start_gesture_loop(service: SpotifyService, app: SpotifyApp, use_laptop_cam=
 
     print("[Gesture] Pornit!")
 
-    # Volum local — evita apeluri API la fiecare frame
     local_volume = 50
 
     while detector.running:
@@ -38,18 +37,20 @@ def start_gesture_loop(service: SpotifyService, app: SpotifyApp, use_laptop_cam=
             if len(fingers) == 5:
                 thumb, index, middle, ring, pinky = fingers
 
-                # Cursor: doar index ridicat SAU pinch (index+mare)
+                # Cursor: index ridicat singur SAU pinch (thumb+index)
                 only_index = not thumb and index and not middle and not ring and not pinky
-                pinch_mid = thumb and not index and middle and not ring and not pinky
+                pinch      = thumb and index and not middle and not ring and not pinky
 
-                if only_index or pinch_mid:
-                    fx = hand_lm[8].x if only_index else hand_lm[12].x
-                    fy = hand_lm[8].y if only_index else hand_lm[12].y
+                if only_index or pinch:
+                    fx = hand_lm[8].x
+                    fy = hand_lm[8].y
                     tx = hand_lm[4].x
                     ty = hand_lm[4].y
                     frame = app.cursor.update(fx, fy, tx, ty, frame=frame)
                 else:
                     app.after(0, app.cursor.hide)
+        else:
+            app.after(0, app.cursor.hide)
 
         # ── Label gest pe camera ──────────────────────
         if data['raw_label']:
@@ -158,7 +159,6 @@ def main():
     print("[OK]   Deschid interfata...")
     app = SpotifyApp(service)
 
-    # Cursor virtual — deseneaza pe camera, click pe UI
     app.cursor = VirtualCursor(app)
 
     gesture_thread = threading.Thread(
