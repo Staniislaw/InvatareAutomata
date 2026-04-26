@@ -60,6 +60,21 @@ def start_gesture_loop(service: SpotifyService, app: SpotifyApp, use_laptop_cam=
         if gesture and recognizer.can_trigger(gesture):
             recognizer.mark_triggered(gesture)
 
+            if gesture == "MUTE":
+                print("[Gesture] → MUTE/UNMUTE")
+                try:
+                    if local_volume > 0:
+                        local_volume = 0
+                        service.set_volume(0)
+                        print("[Gesture] → MUTED 🔇")
+                    else:
+                        local_volume = 50
+                        service.set_volume(50)
+                        print("[Gesture] → UNMUTED 🔊")
+                except Exception as e:
+                    print(f"[Gesture] Eroare mute: {e}")
+
+
             if gesture == "LIKE":
                 print("[Gesture] → LIKE ❤")
                 try:
@@ -109,6 +124,23 @@ def start_gesture_loop(service: SpotifyService, app: SpotifyApp, use_laptop_cam=
                     print(f"[Gesture] → VOLUM: {local_volume}%")
                 except Exception as e:
                     print(f"[Gesture] Eroare: {e}")
+            elif gesture == "DISLIKE":
+                print("[Gesture] → DISLIKE/SKIP 👎")
+
+                try:
+                    state = service.get_current_playback()
+                    if state and state.get("item"):
+                        track_id = state["item"]["id"]
+                        track_name = state["item"]["name"]
+                        # Scoate din saved daca e acolo
+                        if service.is_track_saved(track_id):
+                            service.remove_track(track_id)
+                        # Skip la urmatoarea
+                        service.next_track()
+                        print(f"[Gesture] Hidden & skipped: {track_name}")
+                except Exception as e:
+                    print(f"[Gesture] Eroare dislike: {e}")
+
 
         cv2.imshow("Camera Gesturi", frame)
         if cv2.waitKey(1) & 0xFF in (ord('q'), 27):

@@ -28,8 +28,8 @@ class SpotifyService:
 
     def get_current_playback(self) -> dict | None:
         """Returneaza starea curenta a redarii (sau None daca nimic nu ruleaza)."""
-        # return self.sp.current_playback()
-        return None
+        return self.sp.current_playback()
+        #return None
 
     def play(self, context_uri=None, uris=None, offset_uri=None, device_id=None):
         if device_id is None:

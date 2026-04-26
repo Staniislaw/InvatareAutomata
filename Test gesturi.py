@@ -42,7 +42,10 @@ with HandLandmarker.create_from_options(options) as landmarker:
         result   = landmarker.detect_for_video(mp_image, int(time.time() * 1000))
 
         if result.hand_landmarks:
-            lm         = result.hand_landmarks[0]
+            lm = result.hand_landmarks[0]
+            print(f"lm[4].y={lm[4].y:.2f} lm[2].y={lm[2].y:.2f} lm[9].y={lm[9].y:.2f}")
+            print(
+                f"index={lm[8].y > lm[6].y} middle={lm[12].y > lm[10].y} ring={lm[16].y > lm[14].y} pinky={lm[20].y > lm[18].y}")
             handedness = result.handedness[0][0].display_name if result.handedness else "?"
 
             # Calculeaza starea fiecarui deget

@@ -17,13 +17,15 @@ class GestureRecognizer:
         "SWIPE_RIGHT":  1.5,
         "SWIPE_LEFT":   1.5,
         "LIKE":         3.0,
+        "MUTE":         2.0,
+        "DISLIKE":      3.0,
     }
 
     def __init__(self):
         self._last_action_time = {}
-        self._position_history_r = collections.deque(maxlen=15)  # pentru right
-        self._position_history_l = collections.deque(maxlen=15)  # pentru left
-        self._swipe_blocked_until = 0
+        self._position_history = collections.deque(maxlen=15)
+        self._swipe_blocked_until = 0  # bloc dupa swipe
+
     # ─────────────────────────────────────────────────
     #  FUNCTII INDIVIDUALE
     # ─────────────────────────────────────────────────
@@ -34,24 +36,45 @@ class GestureRecognizer:
         return not thumb and index and middle and not ring and not pinky
 
     def detect_volume_up(self, fingers, palm_y):
-        """🖐 Palma deschisa in JUMATATEA DE SUS a ecranului."""
-        return sum(fingers) >= 4 and palm_y < 0.4
+        """🤙 Call me SUS = Volum +. Deget mare + deget mic ridicate, restul jos."""
+        thumb, index, middle, ring, pinky = fingers
+        return thumb and not index and not middle and not ring and pinky and palm_y < 0.4
 
     def detect_volume_down(self, fingers, palm_y):
-        """🖐 Palma deschisa in JUMATATEA DE JOS a ecranului."""
-        return sum(fingers) >= 4 and palm_y > 0.6
+        """🤙 Call me JOS = Volum -. Deget mare + deget mic ridicate, restul jos."""
+        thumb, index, middle, ring, pinky = fingers
+        return thumb and not index and not middle and not ring and pinky and palm_y > 0.6
+
+    def detect_mute(self, fingers, palm_y):
+        """
+        🖐 Palma deschisa la MIJLOCUL ecranului = Mute/Unmute.
+        palm_y intre 0.35 si 0.65 = zona de mijloc.
+        Toate 5 degete ridicate.
+        """
+        return sum(fingers) >= 4 and 0.35 <= palm_y <= 0.65
 
     def detect_like(self, fingers, hand_lm):
         """
-        Degetul mare + index ridicate si apropiate, restul inchise.
-        Backup: Thumbs up 👍 (doar degetul mare ridicat sus).
+        👍 Thumbs up — DOAR degetul mare sus.
+        Toate celelalte degete INCHISE inclusiv pinky.
         """
         thumb, index, middle, ring, pinky = fingers
-        # ── Backup: Thumbs up 👍 ─────────────────────────────────
+        # Toate celelalte degete trebuie sa fie jos — inclusiv pinky!
         if thumb and not index and not middle and not ring and not pinky:
-            if hand_lm[4].y < hand_lm[9].y:  # degetul mare ridicat sus
+            if hand_lm[4].y < hand_lm[9].y:
                 return True
+        return False
 
+    def detect_dislike(self, fingers, hand_lm):
+        """
+        👎 Thumbs down — DOAR degetul mare jos.
+        Toate celelalte degete INCHISE inclusiv pinky.
+        """
+        thumb, index, middle, ring, pinky = fingers
+        # Toate celelalte degete trebuie sa fie jos — inclusiv pinky!
+        if thumb and not index and not middle and not ring and not pinky:
+            if hand_lm[4].y > hand_lm[9].y:
+                return True
         return False
 
     def detect_swipe_right(self, fingers, hand_lm):
@@ -59,19 +82,23 @@ class GestureRecognizer:
         PUMN inchis miscat de la stanga la dreapta = Next song.
         Pumnul evita conflictele cu Play/Pause si Volum.
         """
-        if sum(fingers) > 1:
-            self._position_history_r.clear()
+        if sum(fingers) > 1:  # nu e pumn — ignora
+            self._position_history.clear()
             return False
-        self._position_history_r.append((hand_lm[9].x, time.time()))
-        if len(self._position_history_r) < 6:
+
+        self._position_history.append((hand_lm[9].x, time.time()))
+
+        if len(self._position_history) < 6:
             return False
-        oldest = self._position_history_r[0]
-        newest = self._position_history_r[-1]
-        dt = newest[1] - oldest[1]
-        dx = newest[0] - oldest[0]
-        if abs(dx) > 0.3 and dt < 2.0 and dx > 0:
-            self._position_history_r.clear()
-            self._position_history_l.clear()
+
+        oldest = self._position_history[0]
+        newest = self._position_history[-1]
+        dt     = newest[1] - oldest[1]
+        dx     = newest[0] - oldest[0]
+        dist   = abs(dx)
+
+        if dist > 0.3 and dt < 2.0 and dx > 0:
+            self._position_history.clear()
             return True
         return False
 
@@ -79,31 +106,35 @@ class GestureRecognizer:
         """
         PUMN inchis miscat de la dreapta la stanga = Previous song.
         """
-        if sum(fingers) > 1:
-            self._position_history_l.clear()
+        if sum(fingers) > 1:  # nu e pumn — ignora
+            self._position_history.clear()
             return False
-        self._position_history_l.append((hand_lm[9].x, time.time()))
-        if len(self._position_history_l) < 6:
+
+        self._position_history.append((hand_lm[9].x, time.time()))
+
+        if len(self._position_history) < 6:
             return False
-        oldest = self._position_history_l[0]
-        newest = self._position_history_l[-1]
-        dt = newest[1] - oldest[1]
-        dx = newest[0] - oldest[0]
-        if abs(dx) > 0.3 and dt < 2.0 and dx < 0:
-            self._position_history_l.clear()
-            self._position_history_r.clear()
+
+        oldest = self._position_history[0]
+        newest = self._position_history[-1]
+        dt     = newest[1] - oldest[1]
+        dx     = newest[0] - oldest[0]
+        dist   = abs(dx)
+
+        if dist > 0.3 and dt < 2.0 and dx < 0:
+            self._position_history.clear()
             return True
         return False
 
     # ─────────────────────────────────────────────────
     #  PROCESOR PRINCIPAL
     # ─────────────────────────────────────────────────
+
     def process(self, result):
         empty = {'gesture': None, 'fingers': [], 'palm_y': None, 'raw_label': ''}
 
         if not result or not result.hand_landmarks:
-            self._position_history_r.clear()
-            self._position_history_l.clear()
+            self._position_history.clear()
             return empty
 
         hand_lm    = result.hand_landmarks[0]
@@ -132,9 +163,17 @@ class GestureRecognizer:
         # ── Celelalte gesturi doar daca nu e bloc ────
         elif time.time() > self._swipe_blocked_until:
 
-            if self.detect_like(fingers, hand_lm):
+            if self.detect_mute(fingers, palm_y):
+                gesture   = "MUTE"
+                raw_label = "🖐 Mute/Unmute"
+
+            elif self.detect_like(fingers, hand_lm):
                 gesture   = "LIKE"
                 raw_label = "🫰 Like!"
+
+            elif self.detect_dislike(fingers, hand_lm):
+                gesture   = "DISLIKE"
+                raw_label = "👎 Dislike/Hide"
 
             elif self.detect_play_pause(fingers):
                 gesture   = "PLAY_PAUSE"
@@ -142,11 +181,11 @@ class GestureRecognizer:
 
             elif self.detect_volume_up(fingers, palm_y):
                 gesture   = "VOLUME_UP"
-                raw_label = f"🖐 Volum + (y={palm_y:.2f})"
+                raw_label = f"🤙 Volum + (y={palm_y:.2f})"
 
             elif self.detect_volume_down(fingers, palm_y):
                 gesture   = "VOLUME_DOWN"
-                raw_label = f"🖐 Volum - (y={palm_y:.2f})"
+                raw_label = f"🤙 Volum - (y={palm_y:.2f})"
 
         return {
             'gesture':   gesture,
